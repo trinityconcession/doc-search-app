@@ -1,0 +1,14 @@
+streamlit
+numpy
+pypdf
+python-docx
+sentence-transformers
+faiss-cpu
+
+# OCR
+pytesseract
+pillow
+pdf2image
+
+# Dropbox
+dropbox

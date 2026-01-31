@@ -1,0 +1,7 @@
+data/
+__pycache__/
+*.pyc
+*.npy
+*.index
+.env
+.DS_Store
