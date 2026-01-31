@@ -41,6 +41,27 @@ DOC_TYPES = ["Invoice", "Tax Exempt"]
 
 
 # =========================
+# Session-state helpers
+# =========================
+def reset_upload_fields():
+    """
+    Clear form fields when switching doc_type to avoid stale values,
+    and reset file_uploader by changing its key.
+    """
+    # Invoice fields
+    st.session_state.pop("supplier_name", None)
+    st.session_state.pop("amount", None)
+
+    # Tax Exempt fields
+    st.session_state.pop("customer_name", None)
+    st.session_state.pop("business_name", None)
+    st.session_state.pop("resale_number", None)
+
+    # reset file uploader by changing key
+    st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
+
+
+# =========================
 # Dropbox Storage (Files only)
 # =========================
 def get_dropbox_client() -> dropbox.Dropbox:
@@ -258,7 +279,7 @@ def rebuild_index_from_db(model):
 st.set_page_config(page_title="Doc Upload + AI Search (Dropbox)", layout="wide")
 st.title("Document Upload + AI Search (Dropbox Storage)")
 
-# Reset uploader trick
+# Reset uploader trick (for Submit and for doc_type switching)
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
@@ -279,28 +300,35 @@ page = st.sidebar.radio("Menu", ["Upload", "AI Search"], index=0)
 if page == "Upload":
     st.subheader("Upload")
 
-    # ✅ FIX: dropdown OUTSIDE the form (so fields update immediately)
+    # ✅ Dropdown OUTSIDE the form + clears fields on change
     doc_type = st.selectbox(
         "Document Type",
         DOC_TYPES,
-        key="doc_type_selector"
+        key="doc_type_selector",
+        on_change=reset_upload_fields
     )
 
     with st.form("upload_form", clear_on_submit=True):
 
-        # Conditional fields INSIDE form
+        # Conditional fields INSIDE form (with keys so they can be cleared)
         if doc_type == "Invoice":
-            supplier_name = st.text_input("Supplier Name *")
-            amount = st.number_input("Amount *", min_value=0.0, step=0.01, format="%.2f")
+            supplier_name = st.text_input("Supplier Name *", key="supplier_name")
+            amount = st.number_input(
+                "Amount *",
+                min_value=0.0,
+                step=0.01,
+                format="%.2f",
+                key="amount"
+            )
 
             customer_name = None
             business_name = None
             resale_number = None
 
         else:  # Tax Exempt
-            customer_name = st.text_input("Customer Name *")
-            business_name = st.text_input("Business Name *")
-            resale_number = st.text_input("Resale Number *")
+            customer_name = st.text_input("Customer Name *", key="customer_name")
+            business_name = st.text_input("Business Name *", key="business_name")
+            resale_number = st.text_input("Resale Number *", key="resale_number")
 
             supplier_name = None
             amount = None
@@ -373,8 +401,8 @@ if page == "Upload":
                     "If it’s scanned PDF/image, OCR must be available."
                 )
 
-            # 5) Refresh/clear form and uploader
-            st.session_state.uploader_key += 1
+            # 5) Refresh/clear form and uploader + clear session fields
+            reset_upload_fields()
             st.rerun()
 
     if not OCR_AVAILABLE:
