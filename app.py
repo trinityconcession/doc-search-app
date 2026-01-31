@@ -13,7 +13,7 @@ import docx
 from sentence_transformers import SentenceTransformer
 import faiss
 
-# OCR deps (on Streamlit Cloud these will work if packages.txt is included)
+# OCR deps (on Streamlit Cloud these work if packages.txt exists)
 OCR_AVAILABLE = True
 try:
     import pytesseract
@@ -48,7 +48,8 @@ def get_dropbox_client() -> dropbox.Dropbox:
     return dropbox.Dropbox(token)
 
 def dropbox_folder() -> str:
-    # Safe default: app folder (Dropbox app created with "App folder" access)
+    # If you created Dropbox app with "App folder" access,
+    # this path should be: /Apps/<your-dropbox-app-name>
     return st.secrets.get("DROPBOX_FOLDER", "/Apps/streamlit-doc-app").rstrip("/")
 
 def dropbox_save(filename: str, content: bytes) -> str:
@@ -71,8 +72,6 @@ def dropbox_load(dbx_path: str) -> bytes:
 
 # =========================
 # SQLite DB (Metadata + extracted text)
-# NOTE: On Streamlit Cloud, local app storage can reset on restart.
-# Dropbox keeps files permanent. Metadata may reset unless you add external DB later.
 # =========================
 def init_db():
     with sqlite3.connect(DB_PATH) as con:
@@ -259,7 +258,7 @@ def rebuild_index_from_db(model):
 st.set_page_config(page_title="Doc Upload + AI Search (Dropbox)", layout="wide")
 st.title("Document Upload + AI Search (Dropbox Storage)")
 
-# reset uploader trick
+# Reset uploader trick
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
@@ -280,22 +279,31 @@ page = st.sidebar.radio("Menu", ["Upload", "AI Search"], index=0)
 if page == "Upload":
     st.subheader("Upload")
 
+    # ✅ FIX: dropdown OUTSIDE the form (so fields update immediately)
+    doc_type = st.selectbox(
+        "Document Type",
+        DOC_TYPES,
+        key="doc_type_selector"
+    )
+
     with st.form("upload_form", clear_on_submit=True):
-        doc_type = st.selectbox("Document Type", DOC_TYPES)
 
-        supplier_name = None
-        amount = None
-        customer_name = None
-        business_name = None
-        resale_number = None
-
+        # Conditional fields INSIDE form
         if doc_type == "Invoice":
             supplier_name = st.text_input("Supplier Name *")
             amount = st.number_input("Amount *", min_value=0.0, step=0.01, format="%.2f")
-        else:
+
+            customer_name = None
+            business_name = None
+            resale_number = None
+
+        else:  # Tax Exempt
             customer_name = st.text_input("Customer Name *")
             business_name = st.text_input("Business Name *")
             resale_number = st.text_input("Resale Number *")
+
+            supplier_name = None
+            amount = None
 
         uploaded = st.file_uploader(
             "Attach File * (pdf/txt/docx; images searchable with OCR)",
@@ -307,6 +315,7 @@ if page == "Upload":
 
     if submitted:
         errors = []
+
         if doc_type == "Invoice":
             if not (supplier_name or "").strip():
                 errors.append("Supplier Name is required for Invoice.")
@@ -369,8 +378,7 @@ if page == "Upload":
             st.rerun()
 
     if not OCR_AVAILABLE:
-        st.info("OCR not available in this environment. PDFs with text still work; scanned docs need OCR.")
-
+        st.info("OCR not available in this environment. Text PDFs work; scanned docs need OCR.")
 
 # ---------------- AI Search ----------------
 else:
